@@ -18,6 +18,27 @@ npm run dev
 `VITE_GOOGLE_MAPS_MAP_ID` defaults to Google's public `DEMO_MAP_ID`, which works for local dev
 with no extra Cloud Console setup (Advanced Markers require a Map ID). See `.env.example`.
 
+## Deploying to GitHub Pages
+
+`.github/workflows/deploy.yml` builds the app and deploys `dist/` on every push to `main`. This
+repo is a *project* page (`greysonpeck.github.io/poc-dot-density/`, not a user page at domain
+root), so `vite.config.ts` sets `base: '/poc-dot-density/'` for the production build only — local
+`npm run dev` still runs at `/`. If the repo is ever renamed, update `base` to match.
+
+One-time setup in the GitHub repo settings:
+
+1. **Settings → Pages → Source**: set to **GitHub Actions** (not "Deploy from a branch" — that
+   serves the raw, un-built source, which is the 404 you just hit: browsers can't execute `.tsx`
+   directly, only Vite's dev server transpiles it on the fly).
+2. **Settings → Secrets and variables → Actions → New repository secret**: add
+   `VITE_GOOGLE_MAPS_API_KEY` with a real key (used to build the deployed bundle). Add
+   `VITE_GOOGLE_MAPS_MAP_ID` too if not using the default `DEMO_MAP_ID`.
+3. **Restrict the API key's HTTP referrers** (Google Cloud Console → Credentials) to
+   `https://greysonpeck.github.io/*`. Vite bakes `VITE_*` env vars into the public bundle at build
+   time — that's normal for any client-side Maps JS app, but it means the key is visible to anyone
+   who opens dev tools, so the referrer restriction is what actually keeps it from being usable
+   elsewhere.
+
 ## Using it
 
 1. Pan/zoom the map to wherever you want the demo routes.
