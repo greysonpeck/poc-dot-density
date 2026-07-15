@@ -77,5 +77,8 @@ export function iconSrc(style: IconStyleDef, color: string): string {
       )
     );
   }
-  return `/icons/${style.folder}/pin_${color}.png`;
+  // Runtime-constructed path — Vite only rewrites asset references it can statically see (e.g.
+  // in index.html or import statements), so this needs BASE_URL by hand to resolve correctly
+  // when deployed under a subpath (GitHub project pages: /<repo-name>/, not domain root).
+  return `${import.meta.env.BASE_URL}icons/${style.folder}/pin_${color}.png`;
 }
