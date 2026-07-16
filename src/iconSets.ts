@@ -16,10 +16,11 @@ export const ICON_STYLES: IconStyleDef[] = [
   pinStyle('pins-nohalo-nodot', 'No halo, no dot', 'pins-nohalo-nodot'),
 ];
 
-/** Inline placeholder so the map is never blank if an icon asset path ever fails to resolve. */
+/** Inline SVG dot — the default style. Also doubles as a placeholder so the map is never blank
+ *  if a raster icon asset path ever fails to resolve. */
 export const FALLBACK_ICON_STYLE: IconStyleDef = {
   id: 'fallback',
-  label: 'Fallback (plain dot)',
+  label: 'Dot',
   folder: '', // no PNGs — iconSrc() renders this one as an inline colored SVG instead
   width: 16,
   height: 16,
@@ -65,7 +66,9 @@ export function colorHex(color: string): string {
   return `#${color.split('_')[1] ?? '2563EB'}`;
 }
 
-/** Resolves an <img> src for a given icon style rendered in a given palette color. */
+/** Resolves an <img> src for a given icon style rendered in a given palette color. Completed vs.
+ *  incomplete is carried entirely by opacity (applied by the caller) — every style, including
+ *  "Dot", renders the same icon regardless of completion status. */
 export function iconSrc(style: IconStyleDef, color: string): string {
   if (style.id === FALLBACK_ICON_STYLE.id) {
     return (

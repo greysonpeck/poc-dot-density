@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { APIProvider } from '@vis.gl/react-google-maps';
 import { ControlPanel } from './components/ControlPanel';
 import { MapView } from './components/MapView';
+import { RouteProgressPanel } from './components/RouteProgressPanel';
 import type { RouteGroup, RouteParams } from './types';
 import { ALL_ICON_STYLES, CURRENT_PROD_ICON_STYLE } from './iconSets';
 import {
@@ -23,6 +24,7 @@ function App() {
   const [routeGroups, setRouteGroups] = useState<RouteGroup[]>([]);
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [pathZoomThreshold, setPathZoomThreshold] = useState(PATH_ZOOM_THRESHOLD_DEFAULT);
+  const [scrimEnabled, setScrimEnabled] = useState(false);
 
   if (!isConfigured) {
     return <ConfigWarning />;
@@ -44,12 +46,16 @@ function App() {
           pointCount={pointCount}
           pathZoomThreshold={pathZoomThreshold}
           onPathZoomThresholdChange={setPathZoomThreshold}
+          scrimEnabled={scrimEnabled}
+          onScrimEnabledChange={setScrimEnabled}
         />
+        <RouteProgressPanel routeGroups={routeGroups} />
         <MapView
           routeGroups={routeGroups}
           iconStyle={selectedIconStyle}
           zoom={zoom}
           pathZoomThreshold={pathZoomThreshold}
+          scrimEnabled={scrimEnabled}
           onZoomChanged={setZoom}
         />
       </div>

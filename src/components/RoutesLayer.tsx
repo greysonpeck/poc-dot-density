@@ -2,9 +2,9 @@ import { Fragment } from 'react';
 import { AdvancedMarker, Polyline } from '@vis.gl/react-google-maps';
 import type { IconStyleDef, RouteGroup, TruckPoint } from '../types';
 import { colorHex, iconSrc } from '../iconSets';
-import { INCOMPLETE_OPACITY } from '../constants';
+import { COMPLETED_OPACITY, PATH_HALO_STROKE_WEIGHT, PATH_STROKE_WEIGHT } from '../constants';
 
-const COMPLETE_STROKE_OPACITY = 0.9;
+const DEFAULT_STROKE_OPACITY = 0.9;
 
 interface RoutesLayerProps {
   routeGroups: RouteGroup[];
@@ -16,7 +16,8 @@ interface RoutesLayerProps {
 /** Renders each route as individual pins at/above pathZoomThreshold, or as a colored polyline
  *  below it — the fix for halo washout: past a certain zoom-out, pins overlap into a wall of
  *  white halo anyway, so draw the route itself instead of the pins that make it up. Either way,
- *  the simulated incomplete tail of the route renders dimmed. */
+ *  the completed portion of the route recedes (dimmed) so the incomplete portion — what still
+ *  needs doing — draws the eye. */
 export function RoutesLayer({ routeGroups, iconStyle, zoom, pathZoomThreshold }: RoutesLayerProps) {
   const showPoints = zoom >= pathZoomThreshold;
 
@@ -33,33 +34,42 @@ function toLatLngs(points: TruckPoint[]) {
   return points.map((point) => ({ lat: point.lat, lng: point.lng }));
 }
 
-/** Draws the route as two segments split at the completion boundary — the incomplete tail
- *  renders dimmed, sharing the boundary point with the complete segment so there's no gap. */
+/** One route segment drawn with a white halo/outline: a wider white Polyline first, then the
+ *  actual colored Polyline on top at normal weight, both sharing the same path and opacity. */
+function PathSegment({ path, color, opacity }: { path: { lat: number; lng: number }[]; color: string; opacity: number }) {
+  return (
+    <Fragment>
+      <Polyline path={path} strokeColor="#ffffff" strokeOpacity={opacity} strokeWeight={PATH_HALO_STROKE_WEIGHT} />
+      <Polyline path={path} strokeColor={color} strokeOpacity={opacity} strokeWeight={PATH_STROKE_WEIGHT} />
+    </Fragment>
+  );
+}
+
+/** Draws the route as two segments split at the completion boundary — the completed portion
+ *  renders dimmed, sharing the boundary point with the incomplete segment so there's no gap. */
 function RoutePath({ group }: { group: RouteGroup }) {
   const color = colorHex(group.color);
   const splitIndex = group.points.findIndex((point) => !point.completed);
 
   if (splitIndex === -1) {
-    return <Polyline path={toLatLngs(group.points)} strokeColor={color} strokeOpacity={COMPLETE_STROKE_OPACITY} strokeWeight={5} />;
+    // Whole route already complete.
+    return <PathSegment path={toLatLngs(group.points)} color={color} opacity={COMPLETED_OPACITY} />;
   }
 
-  const completePart = group.points.slice(0, splitIndex + 1);
+  const completedPart = group.points.slice(0, splitIndex + 1);
   const incompletePart = group.points.slice(splitIndex);
 
   return (
     <Fragment>
-      {completePart.length >= 2 && (
-        <Polyline path={toLatLngs(completePart)} strokeColor={color} strokeOpacity={COMPLETE_STROKE_OPACITY} strokeWeight={5} />
-      )}
-      {incompletePart.length >= 2 && (
-        <Polyline path={toLatLngs(incompletePart)} strokeColor={color} strokeOpacity={INCOMPLETE_OPACITY} strokeWeight={5} />
-      )}
+      {completedPart.length >= 2 && <PathSegment path={toLatLngs(completedPart)} color={color} opacity={COMPLETED_OPACITY} />}
+      {incompletePart.length >= 2 && <PathSegment path={toLatLngs(incompletePart)} color={color} opacity={DEFAULT_STROKE_OPACITY} />}
     </Fragment>
   );
 }
 
 function RouteMarkers({ group, iconStyle }: { group: RouteGroup; iconStyle: IconStyleDef }) {
   const src = iconSrc(iconStyle, group.color);
+
   return (
     <Fragment>
       {group.points.map((point) => (
@@ -74,7 +84,7 @@ function RouteMarkers({ group, iconStyle }: { group: RouteGroup; iconStyle: Icon
             width={iconStyle.width}
             height={iconStyle.height}
             alt=""
-            style={{ display: 'block', opacity: point.completed ? 1 : INCOMPLETE_OPACITY }}
+            style={{ display: 'block', opacity: point.completed ? COMPLETED_OPACITY : 1 }}
           />
         </AdvancedMarker>
       ))}

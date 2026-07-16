@@ -3,7 +3,7 @@ export const DEFAULT_ZOOM = 13;
 
 export const SPACING_METERS_MIN = 2;
 export const SPACING_METERS_MAX = 100;
-export const SPACING_METERS_DEFAULT = 20;
+export const SPACING_METERS_DEFAULT = 14;
 
 export const JITTER_METERS_MIN = 0;
 export const JITTER_METERS_MAX = 15;
@@ -67,7 +67,25 @@ export const ASSUMED_TRUCK_SPEED_MPS = 15; // ~34 mph, only used to flavor synth
 // route per generation, within this range.
 export const COMPLETION_FRACTION_MIN = 0.5;
 export const COMPLETION_FRACTION_MAX = 0.85;
-export const INCOMPLETE_OPACITY = 0.5;
+
+// Completed pins/path segments recede (reduced opacity, same color); incomplete ones render at
+// full color/opacity — what still needs doing should draw the eye, what's already done should
+// fade into the background. An earlier version also desaturated the completed portion, but that
+// was dropped: pure hue-preserving desaturation could still read as "a legitimately different,
+// just less vivid, color" rather than clearly "the same color, muted," especially across several
+// simultaneous routes — opacity alone reads unambiguously as "the same thing, receded."
+export const COMPLETED_OPACITY = 0.35;
+
+// Path mode draws a white halo/outline behind each colored polyline segment for legibility
+// against a busy or dark basemap: a wider white line drawn first, then the actual colored line on
+// top at its normal weight (see RoutePath in RoutesLayer.tsx). This doesn't reintroduce the
+// pin-halo washout problem this whole demo is about — that happens because *many small pin
+// halos* overlap and stack into solid white at high density; a single continuous line's halo
+// doesn't overlap with itself, no matter how dense the underlying points were. The halo matches
+// each segment's own opacity (full for incomplete, COMPLETED_OPACITY for completed) so it doesn't
+// undercut the "completed recedes" effect by rendering complete segments with a bold outline.
+export const PATH_STROKE_WEIGHT = 5;
+export const PATH_HALO_STROKE_WEIGHT = 9;
 
 // Google Maps zoom is numeric-higher-is-closer (0 = whole world, ~20+ = building-level). Below
 // the threshold (zoomed out further, more of the route visible at once, more pin overlap) render
@@ -77,3 +95,12 @@ export const INCOMPLETE_OPACITY = 0.5;
 export const PATH_ZOOM_THRESHOLD_MIN = 3;
 export const PATH_ZOOM_THRESHOLD_MAX = 20;
 export const PATH_ZOOM_THRESHOLD_DEFAULT = 17;
+
+// "Scrim" toggle: a translucent white layer between the basemap tiles and the route markers/
+// polylines, muting the basemap so the data layer pops — for a busy area where map detail
+// competes with pins/lines. Can't use the Map's `styles` prop for this: Google Maps ignores
+// inline `styles` whenever a Map ID is set (required here for Advanced Markers) — styling is
+// supposed to come from the Map ID's Cloud Console config instead. See MapScrim.tsx for the
+// actual implementation (a real google.maps.OverlayView inserted into the tile/marker pane
+// stack) and why that's the correct approach given the Map ID constraint.
+export const SCRIM_OPACITY = 0.5;

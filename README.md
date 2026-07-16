@@ -48,11 +48,18 @@ One-time setup in the GitHub repo settings:
 3. Adjust **Spacing** (distance between pings) and **Jitter** (GPS noise) and click **Generate
    routes**.
 4. Switch the **Icon set** dropdown to compare halo/dot variants against the current production
-   style — this updates every pin on the map immediately, no need to regenerate.
+   style (**Current (halo + dot)**, the default) — this updates every pin on the map immediately,
+   no need to regenerate. **Dot** is a plain colored circle (not one of RCC's actual pin assets),
+   included as a simple baseline for comparison.
 5. Zoom in/out to see the halo-washout effect appear and disappear.
 6. Adjust **Path below zoom**: at/above that zoom level each route renders as individual pins;
    below it, as a single colored line — the fix for the washout. The zoom/mode readout at the top
    of the panel shows which one is currently active. This applies live, no regenerate needed.
+7. Toggle **Dim basemap (scrim)** to mute the map tiles so pins/lines pop against them — useful
+   over a busy, detailed area where basemap contrast competes with the data layer.
+8. Check the **Stops remaining** panel (top-right) for an at-a-glance read on which routes are
+   nearly done vs. which have a long way to go, without needing to visually parse pin/line dimming
+   across the whole map.
 
 See `public/icons/README.md` for how to add new icon sets.
 
@@ -98,10 +105,44 @@ See `public/icons/README.md` for how to add new icon sets.
 - Each point also carries a simulated `completed` status: a random completion fraction between
   `COMPLETION_FRACTION_MIN` and `COMPLETION_FRACTION_MAX` (50%–85%) is chosen per route per
   generation, and points are marked complete in sequence order up to that fraction — a real truck
-  finishes stops as it drives, not in a scattered pattern. Incomplete pins render at
-  `INCOMPLETE_OPACITY` (50%); in path mode the route is drawn as two polylines split at the
-  completion boundary (sharing that point so there's no gap), the incomplete tail dimmed the same
-  way.
+  finishes stops as it drives, not in a scattered pattern. In path mode the route draws as two
+  polylines split at the completion boundary (sharing that point so there's no gap).
+- **Completed** pins/path segments recede — dimmed via `COMPLETED_OPACITY`, same color, no hue
+  change; incomplete ones render at full color/opacity. This is a deliberate flip from an earlier
+  version (completed = full, incomplete = muted): what still needs doing should draw the eye,
+  what's already done should fade into the background. An earlier iteration also desaturated the
+  completed portion, on the theory that opacity alone competes with the basemap's own contrast and
+  reads ambiguously — but hue-preserving desaturation turned out to have its own failure mode: a
+  muted color can still read as "a legitimately different, just less vivid, color" rather than
+  clearly "the same color, muted," especially across several simultaneous routes, so it was dropped
+  in favor of opacity alone. Since `Polyline` is drawn by the Maps SDK (not a DOM node), the
+  completed segment is a second `Polyline` at `COMPLETED_OPACITY`; markers just set the `<img>`'s
+  CSS `opacity` directly. This applies uniformly across every icon style, including **Dot** — a
+  shape-based treatment (e.g. a hollow ring for incomplete points) was tried for that style
+  specifically and reverted; opacity alone is the one signal used everywhere.
+- In path mode, each segment also draws with a white halo/outline for legibility against a busy or
+  dark basemap — a wider white `Polyline` (`PATH_HALO_STROKE_WEIGHT`) drawn first, then the actual
+  colored `Polyline` (`PATH_STROKE_WEIGHT`) on top at normal weight, both at the segment's own
+  opacity (`PathSegment` in `RoutesLayer.tsx`). This doesn't reintroduce the pin-halo washout
+  problem this whole demo is about — that happens because *many small pin halos* overlap and stack
+  into solid white at high density; a single continuous line's halo doesn't overlap with itself no
+  matter how dense the underlying points were.
+- Each route also gets a short display name (e.g. `1525_A`) via `generateRouteName` in
+  `src/lib/routeName.ts` — a random 4-digit number plus a letter derived from the route's position
+  in the generation batch (A, B, C, ...), so multiple routes always get distinct labels.
+- **Stops remaining** panel (`RouteProgressPanel.tsx`, top-right) shows one compact horizontal bar
+  per route, labeled with that route's name and color-coded to match its pin color: the incomplete
+  fraction (full color, reads darker) on the left, the completed fraction (dimmed via
+  `COMPLETED_OPACITY`) on the right — same visual language and left/right emphasis as the map
+  itself, so the panel reads as an extension of the map rather than a separate legend to
+  cross-reference.
+- **Dim basemap (scrim)** toggle mutes the map tiles so pins/lines pop against them. This can't use
+  the Map's `styles` prop — Google Maps ignores inline `styles` whenever a Map ID is set (required
+  here for Advanced Markers), since styling is supposed to come from the Map ID's Cloud Console
+  config instead. Instead, `MapScrim.tsx` uses a real `google.maps.OverlayView` inserted into the
+  `overlayLayer` pane, which sits above `mapPane` (the tiles) but below `markerLayer` (where
+  `AdvancedMarker` renders) — exactly the stacking needed so pins/lines stay crisp above the dimmed
+  basemap.
 - Markers use `AdvancedMarker` from `@vis.gl/react-google-maps`, which is DOM-element-based (one
   element per pin). Comfortable up to roughly a few thousand points; beyond that, expect visible
   stutter on pan/zoom/regenerate. With 4 routes at the default Spacing this stays well under that,

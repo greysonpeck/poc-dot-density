@@ -3,6 +3,7 @@ import { useMap } from '@vis.gl/react-google-maps';
 import type { IconStyleDef, RouteGroup, RouteParams } from '../types';
 import { ALL_ICON_STYLES, colorForRouteIndex } from '../iconSets';
 import { generateRoutes, estimatePointCount } from '../lib/generateRoute';
+import { generateRouteName } from '../lib/routeName';
 import {
   DEFAULT_CENTER,
   JITTER_METERS_MAX,
@@ -27,6 +28,8 @@ interface ControlPanelProps {
   pointCount: number;
   pathZoomThreshold: number;
   onPathZoomThresholdChange: (threshold: number) => void;
+  scrimEnabled: boolean;
+  onScrimEnabledChange: (enabled: boolean) => void;
 }
 
 type RouteStatus = 'idle' | 'routed' | 'partial' | 'fallback';
@@ -41,6 +44,8 @@ export function ControlPanel({
   pointCount,
   pathZoomThreshold,
   onPathZoomThresholdChange,
+  scrimEnabled,
+  onScrimEnabledChange,
 }: ControlPanelProps) {
   const map = useMap(MAP_ID);
   const [routeCount, setRouteCount] = useState(ROUTE_COUNT_DEFAULT);
@@ -55,6 +60,7 @@ export function ControlPanel({
       const generated = await generateRoutes(anchor, routeCount, routeParams);
       const groups: RouteGroup[] = generated.map((route, index) => ({
         id: crypto.randomUUID(),
+        name: generateRouteName(index),
         color: colorForRouteIndex(index),
         points: route.points,
       }));
@@ -84,6 +90,16 @@ export function ControlPanel({
           onChange={(e) => onPathZoomThresholdChange(Number(e.target.value))}
           style={inputStyle}
         />
+      </label>
+
+      <label style={{ ...labelStyle, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <input
+          type="checkbox"
+          checked={scrimEnabled}
+          onChange={(e) => onScrimEnabledChange(e.target.checked)}
+          style={{ margin: 0 }}
+        />
+        Dim basemap (scrim)
       </label>
 
       <label style={labelStyle}>

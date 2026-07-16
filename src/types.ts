@@ -5,7 +5,7 @@ export interface TruckPoint {
   lat: number;
   lng: number;
   timestamp?: string; // ISO 8601, optional synthetic ping time
-  completed: boolean; // simulated work-completion status; incomplete pings render dimmed
+  completed: boolean; // simulated work-completion status; completed pings render dimmed
 }
 
 /** One selectable pin icon style (halo/dot variant). Color is chosen separately per route
@@ -30,6 +30,7 @@ export interface RouteParams {
 /** One simulated truck's route: a set of points sharing a single palette color. */
 export interface RouteGroup {
   id: string;
+  name: string; // display label, e.g. "1525_A" — see generateRouteName in lib/routeName.ts
   color: string; // one of PIN_COLORS (iconSets.ts), e.g. 'blue_3385F3'
   points: TruckPoint[];
 }
