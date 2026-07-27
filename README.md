@@ -76,19 +76,26 @@ See `public/icons/README.md` for how to add new icon sets.
 - Real streets don't always have a direct connector exactly where the lattice expects one, so a
   routed path commonly strays several hundred meters outside the intended box turning around
   between passes — and near a sparse or disconnected street grid (edge of town, industrial areas,
-  highway interchanges) it can occasionally detour for kilometers. `generateRoute` treats a routed
-  path straying more than `MAX_ROUTE_STRAY_MULTIPLIER` past the lattice's half-diagonal as "not
-  great" and retries — up to `MAX_GENERATE_ATTEMPTS` times, each with the anchor nudged to a nearby
-  spot within `RETRY_OFFSET_MAX_M` and a freshly randomized sweep orientation, since a failure is
-  usually local to that specific spot rather than the whole zone. If every attempt comes back loose,
-  it uses the *least-strayed* real routed path seen (as long as it clears the more permissive
-  `MAX_ROUTE_STRAY_HARD_CAP_MULTIPLIER`) rather than throwing away real road geometry for a
-  synthetic curve — a loose-but-real route beats a smooth curve that isn't on any street at all.
-  Only if every attempt returned nothing usable at all (Directions found no route, or even the best
-  attempt blew past the hard cap) does it drop to a synthetic path through the last attempted
-  lattice. Each rejected/loose attempt logs a reason to the console (`generateRoute attempt N: ...`)
-  for diagnosing a specific location's failures. The control panel reports whether all, some, or
-  none of the generated routes ended up using real roads.
+  highway interchanges) or a dense one-way downtown grid it can occasionally detour for kilometers.
+  `generateRoute` treats a routed path straying more than `MAX_ROUTE_STRAY_MULTIPLIER` past the
+  lattice's half-diagonal as "not great" and retries — up to `MAX_GENERATE_ATTEMPTS` times, each
+  with a freshly randomized sweep orientation and the anchor nudged further away as attempts climb
+  (`RETRY_OFFSET_STEP_M * attempt number`, not a single fixed distance). The escalation matters: a
+  location can be bad enough that resampling *nearby* never helps (measured directly against
+  downtown Houston/Seattle, both prone to true fallback under a fixed small retry radius), and only
+  a retry that actually relocates has a real chance of escaping it. If every attempt comes back
+  loose, `generateRoute` uses the *least-strayed* real routed path seen (as long as it clears the
+  more permissive `MAX_ROUTE_STRAY_HARD_CAP_MULTIPLIER`) rather than throwing away real road
+  geometry for a synthetic curve — a loose-but-real route beats a smooth curve that isn't on any
+  street at all. Only if every attempt returned nothing usable at all (Directions found no route,
+  or even the best attempt blew past the hard cap) does it drop to a synthetic path through the
+  last attempted lattice. Each rejected/loose attempt logs a reason to the console
+  (`generateRoute attempt N: ...`, including the actual Directions status or error for
+  diagnosing a specific location's failures — see `RouteWaypointsResult` in `directionsApi.ts`).
+  The control panel reports whether all, some, or none of the generated routes ended up using real
+  roads. None of this eliminates true fallback entirely — a genuinely disconnected or absent street
+  grid at the chosen location still can't be routed on — but it substantially reduces how often it
+  happens versus a fixed nearby-only retry radius.
 - Multiple simulated routes are placed in a roughly square grid of zones around the map center
   (`computeZoneAnchor`), close together with only a modest gap (`ROUTE_ZONE_MARGIN_M`) so routes
   read as several trucks working one neighborhood rather than isolated far-apart service areas.

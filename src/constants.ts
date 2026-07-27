@@ -3,7 +3,7 @@ export const DEFAULT_ZOOM = 13;
 
 export const SPACING_METERS_MIN = 2;
 export const SPACING_METERS_MAX = 100;
-export const SPACING_METERS_DEFAULT = 14;
+export const SPACING_METERS_DEFAULT = 30;
 
 export const JITTER_METERS_MIN = 0;
 export const JITTER_METERS_MAX = 15;
@@ -47,19 +47,37 @@ export const MAX_ROUTE_STRAY_MULTIPLIER = 3;
 // least-strayed real route any attempt actually found than throw it away for a fully synthetic
 // path — real road geometry that's a bit loose beats a smooth curve that isn't on any street at
 // all. This is the outer bound on that concession: even the best available real route must stray
-// less than this multiple of the half-diagonal, or we fall back to synthetic. 6x comfortably
-// clears ordinary "loose" detours while still catching gross outliers (measured ~18x near a
-// sparse/disconnected grid, where even the best of several attempts stayed catastrophically bad).
-export const MAX_ROUTE_STRAY_HARD_CAP_MULTIPLIER = 6;
+// less than this multiple of the half-diagonal, or we fall back to synthetic. 8x comfortably
+// clears ordinary "loose" detours (including tricky downtown grids — see MAX_GENERATE_ATTEMPTS)
+// while still catching gross outliers (measured ~18x near a sparse/disconnected grid, where even
+// the best of several attempts stayed catastrophically bad).
+export const MAX_ROUTE_STRAY_HARD_CAP_MULTIPLIER = 8;
 
 // If a route fails to route compactly on real roads, retry with the anchor nudged to a nearby
-// spot (and a freshly randomized sweep orientation) before settling for the best attempt seen —
-// see MAX_ROUTE_STRAY_HARD_CAP_MULTIPLIER above. Retries stay within RETRY_OFFSET_MAX_M of the
-// original anchor so they don't wander into a neighboring route's zone (see ROUTE_ZONE_MARGIN_M).
-export const MAX_GENERATE_ATTEMPTS = 4;
-export const RETRY_OFFSET_MAX_M = 200;
+// spot (and a freshly randomized sweep orientation) before settling for the best attempt seen.
+// The retry radius escalates per attempt (RETRY_OFFSET_STEP_M * attempt number) rather than using
+// one fixed distance: some real locations (dense one-way downtown grids, water/park-adjacent
+// blocks) are bad enough that no amount of resampling *nearby* helps, and only a retry that
+// actually relocates somewhat can escape them. Measured directly against downtown Houston/Seattle
+// (both prone to synthetic fallback under a fixed 200m retry radius and 4 attempts): escalating
+// the radius and raising attempts from 4 to 6 eliminated synthetic fallback entirely across 6
+// trials, resolving fully compact more often too. The tradeoff: a late, large retry (up to
+// 6*200=1200m) can occasionally land inside a neighboring route's zone (see ROUTE_ZONE_MARGIN_M)
+// — acceptable, since it only happens in the rare case a route needed that many retries at all.
+export const MAX_GENERATE_ATTEMPTS = 6;
+export const RETRY_OFFSET_STEP_M = 200;
 
-export const ASSUMED_TRUCK_SPEED_MPS = 15; // ~34 mph, only used to flavor synthetic timestamps
+// Point timestamps aren't shown anywhere in the UI yet, but are computed to flavor a plausible
+// truck timeline. Driving speed and per-stop dwell time both depend on whether a point falls on a
+// "collection" leg (working stop-to-stop along a residential pass) or a "connector" leg (turning
+// onto the next pass) — see classifyConnectorLegs/isConnectorPoint in generateRoute.ts. Collection
+// legs are slow, stop-and-go, and each stop adds dwell time (idling to service it); connector legs
+// are faster, uninterrupted driving, with no dwell — this only changes simulated timing, not point
+// positions/spacing.
+export const TRUCK_COLLECTION_SPEED_MPS = 4; // ~9 mph — slow stop-and-go working a residential pass
+export const TRUCK_CONNECTOR_SPEED_MPS = 15; // ~34 mph — normal driving speed between passes
+export const STOP_DWELL_SECONDS_MIN = 15;
+export const STOP_DWELL_SECONDS_MAX = 45;
 
 // Each route simulates a truck partway through its run: points are marked complete in sequence
 // order up to a randomly chosen fraction of the route (a real truck completes stops as it drives,
@@ -95,6 +113,35 @@ export const PATH_HALO_STROKE_WEIGHT = 9;
 export const PATH_ZOOM_THRESHOLD_MIN = 3;
 export const PATH_ZOOM_THRESHOLD_MAX = 20;
 export const PATH_ZOOM_THRESHOLD_DEFAULT = 17;
+
+// "Convex hull" toggle: a filled polygon around each route's own points, in that route's color —
+// shows the area a route actually covers, for comparison against the per-pin halo it's otherwise
+// easy to confuse with. Stroke is deliberately heavier than the path halo (PATH_STROKE_WEIGHT)
+// since a hull outline traces one big shape rather than many stacked segments, so it doesn't need
+// legibility help from a white backing — just its own color, bolder.
+export const HULL_FILL_OPACITY = 0.15;
+export const HULL_STROKE_WEIGHT = 4;
+export const HULL_STROKE_OPACITY = 0.8;
+
+// "Separate hulls" sub-mode: instead of one hull per route, draw two — one over the completed
+// points, one over the remaining (incomplete) points — so finished vs. outstanding coverage area
+// can be compared directly. The remaining hull renders as a dense angled hatch of thin lines (see
+// hullStripes in lib/geo.ts) rather than a solid fill, so next to the completed hull's solid fill
+// it doesn't just read as "a second same-color blob."
+//
+// Stripe spacing is defined in real-world meters, but Polylines are geographic — a fixed meter
+// spacing looks increasingly dense zoomed out (more of it fits on screen) and increasingly sparse
+// zoomed in (each gap spans more screen pixels), the opposite of a texture that should look roughly
+// the same regardless of zoom. RoutesLayer compensates by scaling the meter spacing relative to
+// HULL_STRIPE_REFERENCE_ZOOM — the zoom this base value was tuned at — doubling it for each zoom
+// level further out and halving it for each level further in, clamped to MIN/MAX so it never goes
+// dense enough to tank performance (many tiny Polylines) or sparse enough to vanish.
+export const HULL_STRIPE_SPACING_M = 5;
+export const HULL_STRIPE_REFERENCE_ZOOM = 17; // matches PATH_ZOOM_THRESHOLD_DEFAULT
+export const HULL_STRIPE_SPACING_MIN_M = 2;
+export const HULL_STRIPE_SPACING_MAX_M = 16;
+export const HULL_STRIPE_STROKE_WEIGHT = 1;
+export const HULL_STRIPE_ANGLE_DEG = 45;
 
 // "Scrim" toggle: a translucent white layer between the basemap tiles and the route markers/
 // polylines, muting the basemap so the data layer pops — for a busy area where map detail

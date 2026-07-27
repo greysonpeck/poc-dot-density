@@ -1,7 +1,7 @@
 import { Map, type MapCameraChangedEvent } from '@vis.gl/react-google-maps';
 import { RoutesLayer } from './RoutesLayer';
 import { MapScrim } from './MapScrim';
-import type { IconStyleDef, RouteGroup } from '../types';
+import type { HullMode, IconStyleDef, RouteGroup } from '../types';
 import { DEFAULT_CENTER, DEFAULT_ZOOM, SCRIM_OPACITY } from '../constants';
 import { GOOGLE_MAPS_MAP_ID } from '../config';
 
@@ -13,10 +13,21 @@ interface MapViewProps {
   zoom: number;
   pathZoomThreshold: number;
   scrimEnabled: boolean;
+  hullsEnabled: boolean;
+  hullMode: HullMode;
   onZoomChanged?: (zoom: number) => void;
 }
 
-export function MapView({ routeGroups, iconStyle, zoom, pathZoomThreshold, scrimEnabled, onZoomChanged }: MapViewProps) {
+export function MapView({
+  routeGroups,
+  iconStyle,
+  zoom,
+  pathZoomThreshold,
+  scrimEnabled,
+  hullsEnabled,
+  hullMode,
+  onZoomChanged,
+}: MapViewProps) {
   return (
     <Map
       id={MAP_ID}
@@ -29,7 +40,14 @@ export function MapView({ routeGroups, iconStyle, zoom, pathZoomThreshold, scrim
       onCameraChanged={(event: MapCameraChangedEvent) => onZoomChanged?.(event.detail.zoom)}
     >
       {scrimEnabled && <MapScrim opacity={SCRIM_OPACITY} />}
-      <RoutesLayer routeGroups={routeGroups} iconStyle={iconStyle} zoom={zoom} pathZoomThreshold={pathZoomThreshold} />
+      <RoutesLayer
+        routeGroups={routeGroups}
+        iconStyle={iconStyle}
+        zoom={zoom}
+        pathZoomThreshold={pathZoomThreshold}
+        hullsEnabled={hullsEnabled}
+        hullMode={hullMode}
+      />
     </Map>
   );
 }

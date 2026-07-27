@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import { useMap } from '@vis.gl/react-google-maps';
-import type { IconStyleDef, RouteGroup, RouteParams } from '../types';
+import type { HullMode, IconStyleDef, RouteGroup, RouteParams } from '../types';
 import { ALL_ICON_STYLES, colorForRouteIndex } from '../iconSets';
 import { generateRoutes, estimatePointCount } from '../lib/generateRoute';
 import { generateRouteName } from '../lib/routeName';
@@ -30,6 +30,10 @@ interface ControlPanelProps {
   onPathZoomThresholdChange: (threshold: number) => void;
   scrimEnabled: boolean;
   onScrimEnabledChange: (enabled: boolean) => void;
+  hullsEnabled: boolean;
+  onHullsEnabledChange: (enabled: boolean) => void;
+  hullMode: HullMode;
+  onHullModeChange: (mode: HullMode) => void;
 }
 
 type RouteStatus = 'idle' | 'routed' | 'partial' | 'fallback';
@@ -46,6 +50,10 @@ export function ControlPanel({
   onPathZoomThresholdChange,
   scrimEnabled,
   onScrimEnabledChange,
+  hullsEnabled,
+  onHullsEnabledChange,
+  hullMode,
+  onHullModeChange,
 }: ControlPanelProps) {
   const map = useMap(MAP_ID);
   const [routeCount, setRouteCount] = useState(ROUTE_COUNT_DEFAULT);
@@ -101,6 +109,41 @@ export function ControlPanel({
         />
         Dim basemap (scrim)
       </label>
+
+      <label style={{ ...labelStyle, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <input
+          type="checkbox"
+          checked={hullsEnabled}
+          onChange={(e) => onHullsEnabledChange(e.target.checked)}
+          style={{ margin: 0 }}
+        />
+        Show convex hulls
+      </label>
+
+      {hullsEnabled && (
+        <div style={{ marginLeft: 22, marginTop: '-0.5rem', marginBottom: '0.75rem' }}>
+          <label style={{ ...labelStyle, flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <input
+              type="radio"
+              name="hullMode"
+              checked={hullMode === 'default'}
+              onChange={() => onHullModeChange('default')}
+              style={{ margin: 0 }}
+            />
+            Default
+          </label>
+          <label style={{ ...labelStyle, flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 0 }}>
+            <input
+              type="radio"
+              name="hullMode"
+              checked={hullMode === 'separate'}
+              onChange={() => onHullModeChange('separate')}
+              style={{ margin: 0 }}
+            />
+            Separate hulls for Remaining/Incomplete
+          </label>
+        </div>
+      )}
 
       <label style={labelStyle}>
         Icon set

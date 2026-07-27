@@ -3,7 +3,7 @@ import { APIProvider } from '@vis.gl/react-google-maps';
 import { ControlPanel } from './components/ControlPanel';
 import { MapView } from './components/MapView';
 import { RouteProgressPanel } from './components/RouteProgressPanel';
-import type { RouteGroup, RouteParams } from './types';
+import type { HullMode, RouteGroup, RouteParams } from './types';
 import { ALL_ICON_STYLES, CURRENT_PROD_ICON_STYLE } from './iconSets';
 import {
   DEFAULT_ZOOM,
@@ -25,6 +25,8 @@ function App() {
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [pathZoomThreshold, setPathZoomThreshold] = useState(PATH_ZOOM_THRESHOLD_DEFAULT);
   const [scrimEnabled, setScrimEnabled] = useState(false);
+  const [hullsEnabled, setHullsEnabled] = useState(false);
+  const [hullMode, setHullMode] = useState<HullMode>('default');
 
   if (!isConfigured) {
     return <ConfigWarning />;
@@ -48,6 +50,10 @@ function App() {
           onPathZoomThresholdChange={setPathZoomThreshold}
           scrimEnabled={scrimEnabled}
           onScrimEnabledChange={setScrimEnabled}
+          hullsEnabled={hullsEnabled}
+          onHullsEnabledChange={setHullsEnabled}
+          hullMode={hullMode}
+          onHullModeChange={setHullMode}
         />
         <RouteProgressPanel routeGroups={routeGroups} />
         <MapView
@@ -56,6 +62,8 @@ function App() {
           zoom={zoom}
           pathZoomThreshold={pathZoomThreshold}
           scrimEnabled={scrimEnabled}
+          hullsEnabled={hullsEnabled}
+          hullMode={hullMode}
           onZoomChanged={setZoom}
         />
       </div>

@@ -21,6 +21,10 @@ export interface IconStyleDef {
   anchor: { x: number; y: number };
 }
 
+/** Convex hull display mode: one hull per route, or split into a completed-points hull and a
+ *  remaining-points hull — see HULL_STRIPE_SPACING_M in constants.ts for the 'separate' styling. */
+export type HullMode = 'default' | 'separate';
+
 /** User-adjustable route generation parameters. */
 export interface RouteParams {
   spacingMeters: number; // distance between consecutive sampled points along the spline

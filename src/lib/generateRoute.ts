@@ -1,21 +1,24 @@
-import { destinationPoint, haversineDistanceMeters, lerpLatLng, type LatLng } from './geo';
+import { destinationPoint, haversineDistanceMeters, lerpLatLng, pointToSegmentDistanceMeters, type LatLng } from './geo';
 import { sampleSplineDensely } from './spline';
 import { routeWaypoints } from './directionsApi';
 import type { RouteParams, TruckPoint } from '../types';
 import {
-  ASSUMED_TRUCK_SPEED_MPS,
   COMPLETION_FRACTION_MAX,
   COMPLETION_FRACTION_MIN,
   MAX_GENERATE_ATTEMPTS,
   MAX_ROUTE_STRAY_HARD_CAP_MULTIPLIER,
   MAX_ROUTE_STRAY_MULTIPLIER,
-  RETRY_OFFSET_MAX_M,
+  RETRY_OFFSET_STEP_M,
   ROUTE_ZONE_MARGIN_M,
+  STOP_DWELL_SECONDS_MAX,
+  STOP_DWELL_SECONDS_MIN,
   SWEEP_COL_SPACING_M,
   SWEEP_COLS,
   SWEEP_JITTER_M,
   SWEEP_ROW_SPACING_M,
   SWEEP_ROWS,
+  TRUCK_CONNECTOR_SPEED_MPS,
+  TRUCK_COLLECTION_SPEED_MPS,
 } from '../constants';
 
 /** Straight-line half-diagonal of the intended lattice footprint, in meters. */
@@ -115,6 +118,31 @@ function maxStrayDistance(path: LatLng[], anchor: LatLng): number {
   return Math.max(...path.map((point) => haversineDistanceMeters(anchor, point)));
 }
 
+/** Which consecutive-waypoint legs are "connector" turns between sweep passes (row transitions)
+ *  rather than "collection" legs along a residential pass — used to pace the simulated truck
+ *  timeline (see TRUCK_COLLECTION_SPEED_MPS et al. in constants.ts): slower with dwell time on
+ *  collection legs, faster with none on connector legs. A leg (waypoints[i] -> waypoints[i+1]) is
+ *  a connector iff i is the last column of its row, i.e. i+1 lands on the start of the next row. */
+function classifyConnectorLegs(waypointCount: number): boolean[] {
+  return Array.from({ length: waypointCount - 1 }, (_, i) => (i + 1) % SWEEP_COLS === 0);
+}
+
+/** Classifies `point` as on a connector leg or a collection leg by nearest waypoint-to-waypoint
+ *  segment. Cheap and approximate by design — this only needs to pick a driving speed/dwell
+ *  time, not locate the point precisely. */
+function isConnectorPoint(point: LatLng, waypoints: LatLng[], connectorLegs: boolean[]): boolean {
+  let bestDistance = Infinity;
+  let connector = false;
+  for (let i = 0; i < connectorLegs.length; i++) {
+    const distance = pointToSegmentDistanceMeters(point, waypoints[i], waypoints[i + 1]);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      connector = connectorLegs[i];
+    }
+  }
+  return connector;
+}
+
 export interface GeneratedRoute {
   points: TruckPoint[];
   /** False when the Directions API call failed, found no route, or strayed too far from the
@@ -128,17 +156,19 @@ export async function generateRoute(anchor: LatLng, params: RouteParams): Promis
   let bestRouted: LatLng[] | null = null;
   let bestStray = Infinity;
 
-  // Retry with a nearby anchor (and a freshly randomized sweep orientation, from
-  // generateWaypoints) before settling — a failure is often local to that specific spot (sparse
-  // street grid, a gap between disconnected roads) rather than the whole zone. Track the
-  // least-strayed real route seen along the way as a fallback better than pure synthetic.
+  // Retry with the anchor nudged further away each attempt (and a freshly randomized sweep
+  // orientation, from generateWaypoints) before settling — some locations (dense one-way downtown
+  // grids, water/park-adjacent blocks) are bad enough that resampling *nearby* never helps, and
+  // only a retry that actually relocates can escape them; see RETRY_OFFSET_STEP_M in constants.ts
+  // for the measurements behind this. Track the least-strayed real route seen along the way as a
+  // fallback better than pure synthetic.
   for (let attempt = 0; attempt < MAX_GENERATE_ATTEMPTS; attempt++) {
-    const attemptAnchor = attempt === 0 ? anchor : jitterPoint(anchor, RETRY_OFFSET_MAX_M);
+    const attemptAnchor = attempt === 0 ? anchor : jitterPoint(anchor, RETRY_OFFSET_STEP_M * attempt);
     waypoints = generateWaypoints(attemptAnchor);
-    const routed = await routeWaypoints(waypoints);
+    const { path: routed, status } = await routeWaypoints(waypoints);
 
     if (routed === null) {
-      console.warn(`generateRoute attempt ${attempt}: Directions found no route`);
+      console.warn(`generateRoute attempt ${attempt}: ${status}`);
       continue;
     }
 
@@ -167,7 +197,7 @@ export async function generateRoute(anchor: LatLng, params: RouteParams): Promis
   const sampled = resampleByArcLength(fine, params.spacingMeters);
 
   const startTime = Date.now();
-  const secondsPerPoint = params.spacingMeters / ASSUMED_TRUCK_SPEED_MPS;
+  const connectorLegs = classifyConnectorLegs(waypoints.length);
 
   // Simulates a truck partway through its run: complete in sequence order up to a randomly
   // chosen fraction of the route, incomplete from there on — not a scattered random subset,
@@ -175,17 +205,33 @@ export async function generateRoute(anchor: LatLng, params: RouteParams): Promis
   const completionFraction = randomBetween(COMPLETION_FRACTION_MIN, COMPLETION_FRACTION_MAX);
   const completeCount = Math.round(sampled.length * completionFraction);
 
-  const points = sampled.map((point, index) => {
+  // Paces the simulated timeline: slower with dwell time on collection legs (working a
+  // residential pass stop-to-stop), faster with no dwell on connector legs (turning onto the next
+  // pass) — see classifyConnectorLegs/isConnectorPoint above. Only affects timestamps; `sampled`'s
+  // point positions/spacing are untouched.
+  let elapsedSeconds = 0;
+  const points: TruckPoint[] = [];
+  for (let index = 0; index < sampled.length; index++) {
+    const point = sampled[index];
+    if (index > 0) {
+      const connector = isConnectorPoint(point, waypoints, connectorLegs);
+      const speed = connector ? TRUCK_CONNECTOR_SPEED_MPS : TRUCK_COLLECTION_SPEED_MPS;
+      elapsedSeconds += haversineDistanceMeters(sampled[index - 1], point) / speed;
+      if (!connector) {
+        elapsedSeconds += randomBetween(STOP_DWELL_SECONDS_MIN, STOP_DWELL_SECONDS_MAX);
+      }
+    }
+
     const jittered = jitterPoint(point, params.jitterMeters);
-    return {
+    points.push({
       id: crypto.randomUUID(),
       sequence: index,
       lat: jittered.lat,
       lng: jittered.lng,
-      timestamp: new Date(startTime + index * secondsPerPoint * 1000).toISOString(),
+      timestamp: new Date(startTime + elapsedSeconds * 1000).toISOString(),
       completed: index < completeCount,
-    };
-  });
+    });
+  }
 
   return { points, snappedToRoads };
 }
